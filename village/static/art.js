@@ -7,6 +7,16 @@
     roof: "#c25b4a", wall: "#ead9b8", wood0: "#6b4a2f", wood1: "#8f6439",
     ink: "#2b2430", paper: "#f6f0dd", shadow: "#3b6b3d"
   };
+  // Night is a second palette, not an alpha overlay: every named colour darkens
+  // and cools, so the UI can swap tables and still draw the same shapes.
+  var NIGHT = {};
+  Object.keys(PALETTE).forEach(function (k) {
+    var n = parseInt(PALETTE[k].slice(1), 16);
+    var r = Math.round(((n >> 16) & 255) * 0.42);
+    var gg = Math.round(((n >> 8) & 255) * 0.46);
+    var b = Math.round((n & 255) * 0.62);
+    NIGHT[k] = "#" + ((1 << 24) + (r << 16) + (gg << 8) + b).toString(16).slice(1);
+  });
   var BAYER = [
     0, 8, 2, 10,
     12, 4, 14, 6,
@@ -27,5 +37,5 @@
     }
   }
 
-  g.art = { PALETTE: PALETTE, dither: dither };
+  g.art = { PALETTE: PALETTE, NIGHT: NIGHT, dither: dither };
 })(globalThis);
