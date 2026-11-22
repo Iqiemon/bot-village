@@ -74,8 +74,9 @@ That maps onto the reference cleanly:
 **Identity is the gap.** A session has an id, a cwd, a pid. No name, title or
 avatar. The reference gets these from `profile.json`; we invent them:
 
-- **Name** — from the project folder name, plus a short id suffix when two
-  sessions share a folder (`my-app`, `my-app-3f2a`).
+- **Name** — the project folder name plus a short id suffix, always
+  (`my-app-3f2a91cd`). The name depends only on the session, never on which
+  siblings are live, so it survives a sibling joining or leaving.
 - **Title** — optional, from a `village.json` beside the data directory.
   Unset is fine; the card simply omits the line.
 - **Avatar** — generated deterministically from the session id, never random
