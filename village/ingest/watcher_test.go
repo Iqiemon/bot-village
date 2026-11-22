@@ -144,3 +144,96 @@ func TestTranscriptWriteIsSeenWithoutWaitingForPoll(t *testing.T) {
 		t.Fatal("fsnotify did not trigger a read")
 	}
 }
+
+func TestBurstIsPerSession(t *testing.T) {
+	dir := t.TempDir()
+	writeSession(t, dir, "1", "s-1")
+	writeSession(t, dir, "2", "s-2")
+	writeTranscript(t, dir, "app", "s-1", "")
+	writeTranscript(t, dir, "app", "s-2", "")
+	w := startWatcher(t, dir)
+	collect(t, w.Events(), 100*time.Millisecond) // spawns
+
+	writeTranscript(t, dir, "app", "s-1", `{"type":"user"}`+"\n")
+	time.Sleep(200 * time.Millisecond)
+	for i := 0; i < 5; i++ {
+		writeTranscript(t, dir, "app", "s-2",
+			`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read"}]}}`+"\n")
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	var activities []Event
+	for _, ev := range collect(t, w.Events(), 700*time.Millisecond) {
+		if ev.Kind == "activity" && ev.SessionID == "s-2" {
+			activities = append(activities, ev)
+		}
+	}
+	if len(activities) != 1 {
+		t.Fatalf("s-2 should emit one activity, got %+v", activities)
+	}
+}
+
+func TestScanErrorKeepsVillagers(t *testing.T) {
+	dir := t.TempDir()
+	writeSession(t, dir, "1", "s-1")
+	w := startWatcher(t, dir)
+	next(t, w.Events())
+
+	if err := os.Rename(filepath.Join(dir, "sessions"), filepath.Join(dir, "sessions.off")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sessions"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := collect(t, w.Events(), 200*time.Millisecond); len(got) != 0 {
+		t.Fatalf("a transient scan error removed the villager: %+v", got)
+	}
+
+	os.Remove(filepath.Join(dir, "sessions"))
+	if err := os.Rename(filepath.Join(dir, "sessions.off"), filepath.Join(dir, "sessions")); err != nil {
+		t.Fatal(err)
+	}
+	gone := false
+	for _, ev := range collect(t, w.Events(), 200*time.Millisecond) {
+		if ev.SessionID != "s-1" {
+			continue
+		}
+		switch ev.Kind {
+		case "gone":
+			gone = true
+		case "spawn":
+			if !gone {
+				t.Fatalf("the villager respawned: %+v", ev)
+			}
+		}
+	}
+}
+
+func TestDeleteMidBurstEmitsPendingActivity(t *testing.T) {
+	dir := t.TempDir()
+	writeSession(t, dir, "1", "s-1")
+	writeTranscript(t, dir, "app", "s-1", "")
+	w := startWatcher(t, dir)
+	next(t, w.Events())
+
+	writeTranscript(t, dir, "app", "s-1",
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read"}]}}`+"\n")
+	time.Sleep(50 * time.Millisecond)
+	if err := os.Remove(filepath.Join(dir, "sessions", "1.json")); err != nil {
+		t.Fatal(err)
+	}
+
+	got := collect(t, w.Events(), 600*time.Millisecond)
+	var activity, gone bool
+	for _, ev := range got {
+		switch ev.Kind {
+		case "activity":
+			activity = activity || ev.SessionID == "s-1"
+		case "gone":
+			gone = gone || ev.SessionID == "s-1"
+		}
+	}
+	if !activity || !gone {
+		t.Fatalf("want activity and gone, got %+v", got)
+	}
+}
