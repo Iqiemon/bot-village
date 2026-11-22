@@ -2,6 +2,7 @@ package roster
 
 import (
 	"bytes"
+	"fmt"
 	"image/png"
 	"testing"
 )
@@ -22,5 +23,17 @@ func TestAvatarIs32x32PNG(t *testing.T) {
 	}
 	if cfg.Width != 32 || cfg.Height != 32 {
 		t.Fatalf("got %dx%d", cfg.Width, cfg.Height)
+	}
+}
+
+func TestAvatarsAreDistinctAcrossVillage(t *testing.T) {
+	seen := map[string]string{}
+	for i := 0; i < 1000; i++ {
+		id := fmt.Sprintf("session-%d", i)
+		png := string(AvatarPNG(id))
+		if prev, ok := seen[png]; ok {
+			t.Fatalf("%s and %s share a face", prev, id)
+		}
+		seen[png] = id
 	}
 }

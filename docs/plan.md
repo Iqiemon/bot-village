@@ -371,7 +371,7 @@ Expected: FAIL — `Build` undefined.
 
 - [ ] **Step 3: Implement naming, titles and avatars**
 
-Names: slug, or `slug-<first 4 hex of session id>` on collision. Avatars: a fixed-palette critter face derived from FNV-1a of the session id, encoded with `image/png`.
+Names: always `slug-<8 hex of session id>`, so a name never changes when a sibling joins or leaves. Avatars: a fixed-palette critter face whose features are drawn from a mixed hash of the session id, encoded with `image/png`.
 
 - [ ] **Step 4: Run test to verify it passes**
 

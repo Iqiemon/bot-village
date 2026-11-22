@@ -7,42 +7,73 @@ import (
 	"botvillage/ingest"
 )
 
-func TestSameSlugGetsDistinctStableNames(t *testing.T) {
+func names(sessions ...ingest.LiveSession) map[string]string {
+	m := map[string]string{}
+	for _, v := range Build(sessions, nil) {
+		m[v.SessionID] = v.Name
+	}
+	return m
+}
+
+func TestSameSlugNamesAreDistinctAndStable(t *testing.T) {
 	a := ingest.LiveSession{SessionID: "aaaa1111", Slug: "my-app"}
 	b := ingest.LiveSession{SessionID: "bbbb2222", Slug: "my-app"}
+	lower := ingest.LiveSession{SessionID: "00001111", Slug: "my-app"}
 
-	first := Build([]ingest.LiveSession{a, b}, nil)
-	second := Build([]ingest.LiveSession{b, a}, nil)
+	alone := names(a)[a.SessionID]
+	withB := names(a, b)
+	if withB[a.SessionID] != alone {
+		t.Fatalf("name changed when a sibling joined: %q then %q", alone, withB[a.SessionID])
+	}
+	if withB[a.SessionID] == withB[b.SessionID] {
+		t.Fatalf("same-cwd names collide: %q", withB[a.SessionID])
+	}
 
-	names := map[string]string{}
-	for _, v := range first {
-		names[v.SessionID] = v.Name
+	both := names(a, lower)
+	if both[a.SessionID] != alone {
+		t.Fatalf("name changed when a lower-id sibling joined: %q then %q", alone, both[a.SessionID])
 	}
-	if names["aaaa1111"] == names["bbbb2222"] {
-		t.Fatalf("names collide: %q", names["aaaa1111"])
+	if again := names(a)[a.SessionID]; again != both[a.SessionID] {
+		t.Fatalf("name changed when a sibling left: %q then %q", both[a.SessionID], again)
 	}
-	if names["aaaa1111"] != "my-app" {
-		t.Fatalf("first name = %q, want my-app", names["aaaa1111"])
-	}
-	if !strings.HasPrefix(names["bbbb2222"], "my-app-") || len(names["bbbb2222"]) != len("my-app-")+4 {
-		t.Fatalf("second name = %q, want my-app-<4 hex>", names["bbbb2222"])
-	}
-	for _, v := range second {
-		if names[v.SessionID] != v.Name {
-			t.Fatalf("name changed on repeat: %q then %q", names[v.SessionID], v.Name)
-		}
+
+	if names(b, a)[a.SessionID] != withB[a.SessionID] {
+		t.Fatal("name depends on scan order")
 	}
 }
 
-func TestDistinctSlugsKeepPlainNames(t *testing.T) {
+func TestNameSuffixIsHex(t *testing.T) {
+	got := Build([]ingest.LiveSession{
+		{SessionID: "zzzz-9999", Slug: "my-app"},
+		{SessionID: "yyyy-8888", Slug: "my-app"},
+	}, nil)
+	seen := map[string]bool{}
+	for _, v := range got {
+		suffix := strings.TrimPrefix(v.Name, "my-app-")
+		if suffix == v.Name || len(suffix) != 8 {
+			t.Fatalf("name = %q, want my-app-<8 hex>", v.Name)
+		}
+		for _, r := range suffix {
+			if !strings.ContainsRune("0123456789abcdef", r) {
+				t.Fatalf("suffix %q is not hex", suffix)
+			}
+		}
+		if seen[v.Name] {
+			t.Fatalf("duplicate name %q", v.Name)
+		}
+		seen[v.Name] = true
+	}
+}
+
+func TestDistinctSlugsGetDistinctNames(t *testing.T) {
 	got := Build([]ingest.LiveSession{
 		{SessionID: "aaaa1111", Slug: "my-app"},
 		{SessionID: "bbbb2222", Slug: "other-app"},
 	}, nil)
 	seeds := map[uint64]bool{}
 	for _, v := range got {
-		if v.Name != v.Slug {
-			t.Fatalf("name = %q, want slug %q", v.Name, v.Slug)
+		if !strings.HasPrefix(v.Name, v.Slug+"-") {
+			t.Fatalf("name = %q, want prefix %q", v.Name, v.Slug+"-")
 		}
 		if v.Seed == 0 || seeds[v.Seed] {
 			t.Fatalf("seed %d not unique for %q", v.Seed, v.Name)
@@ -51,29 +82,12 @@ func TestDistinctSlugsKeepPlainNames(t *testing.T) {
 	}
 }
 
-func TestCollisionSuffixIsHex(t *testing.T) {
+func TestSlugShapedLikeSuffixDoesNotCollide(t *testing.T) {
 	got := Build([]ingest.LiveSession{
-		{SessionID: "zzzz-9999", Slug: "my-app"},
-		{SessionID: "yyyy-8888", Slug: "my-app"},
+		{SessionID: "aaaa1111", Slug: "my-app"},
+		{SessionID: "bbbb2222", Slug: "my-app-a7f9"},
 	}, nil)
-	plain, suffixed := 0, 0
-	for _, v := range got {
-		if v.Name == "my-app" {
-			plain++
-			continue
-		}
-		suffixed++
-		suffix := strings.TrimPrefix(v.Name, "my-app-")
-		if len(suffix) != 4 {
-			t.Fatalf("name = %q, want my-app-<4 hex>", v.Name)
-		}
-		for _, r := range suffix {
-			if !strings.ContainsRune("0123456789abcdef", r) {
-				t.Fatalf("suffix %q is not hex", suffix)
-			}
-		}
-	}
-	if plain != 1 || suffixed != 1 {
-		t.Fatalf("plain %d suffixed %d", plain, suffixed)
+	if got[0].Name == got[1].Name {
+		t.Fatalf("names collide: %q", got[0].Name)
 	}
 }

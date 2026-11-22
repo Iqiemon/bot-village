@@ -4,7 +4,6 @@ package roster
 import (
 	"fmt"
 	"hash/fnv"
-	"sort"
 
 	"botvillage/ingest"
 )
@@ -18,35 +17,19 @@ type Villager struct {
 	Seed      uint64
 }
 
-// Build names every session: the slug when it is unique, otherwise the slug
-// plus a 4-hex suffix from the session id. The lowest session id keeps the
-// plain slug, so names do not depend on scan order.
+// Build names each session from its own slug and session id. A name never
+// depends on which other sessions are live, so it survives a sibling joining,
+// leaving, or the scan arriving in a different order.
 func Build(sessions []ingest.LiveSession, titles map[string]string) []Villager {
-	bySlug := map[string][]int{}
+	out := make([]Villager, len(sessions))
 	for i, s := range sessions {
-		bySlug[s.Slug] = append(bySlug[s.Slug], i)
-	}
-	names := make([]string, len(sessions))
-	for slug, idxs := range bySlug {
+		slug := s.Slug
 		if slug == "" {
 			slug = "villager"
 		}
-		sort.Slice(idxs, func(a, b int) bool {
-			return sessions[idxs[a]].SessionID < sessions[idxs[b]].SessionID
-		})
-		for n, i := range idxs {
-			names[i] = slug
-			if n > 0 {
-				names[i] += "-" + shortID(sessions[i].SessionID)
-			}
-		}
-	}
-
-	out := make([]Villager, len(sessions))
-	for i, s := range sessions {
 		out[i] = Villager{
 			SessionID: s.SessionID,
-			Name:      names[i],
+			Name:      slug + "-" + shortID(s.SessionID),
 			Title:     titles[s.SessionID],
 			Slug:      s.Slug,
 			Seed:      seed(s.SessionID),
@@ -58,7 +41,7 @@ func Build(sessions []ingest.LiveSession, titles map[string]string) []Villager {
 func shortID(sessionID string) string {
 	h := fnv.New32a()
 	h.Write([]byte(sessionID))
-	return fmt.Sprintf("%08x", h.Sum32())[:4]
+	return fmt.Sprintf("%08x", h.Sum32())
 }
 
 func seed(sessionID string) uint64 {
