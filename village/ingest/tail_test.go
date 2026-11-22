@@ -124,6 +124,18 @@ func TestLongLineIsTruncatedNotFatal(t *testing.T) {
 	}
 }
 
+func TestStringContentUserLineIsMessage(t *testing.T) {
+	var lines []Line
+	tr, p := newTailer(t, &lines)
+	appendFile(t, p, `{"type":"user","message":{"role":"user","content":"hello"}}`+"\n")
+	if _, err := tr.Read(); err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || lines[0].Kind != "message" || lines[0].Role != "user" {
+		t.Fatalf("%+v", lines)
+	}
+}
+
 func TestToolLineCarriesToolAndRole(t *testing.T) {
 	var lines []Line
 	tr, p := newTailer(t, &lines)

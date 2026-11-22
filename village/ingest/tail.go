@@ -106,11 +106,8 @@ func parseLine(raw []byte) Line {
 	var m struct {
 		Type    string `json:"type"`
 		Message *struct {
-			Role    string `json:"role"`
-			Content []struct {
-				Type string `json:"type"`
-				Name string `json:"name"`
-			} `json:"content"`
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
 		} `json:"message"`
 	}
 	if json.Unmarshal(raw, &m) != nil || (m.Type != "user" && m.Type != "assistant") {
@@ -123,7 +120,14 @@ func parseLine(raw []byte) Line {
 	if m.Message.Role != "" {
 		l.Role = m.Message.Role
 	}
-	for _, p := range m.Message.Content {
+	var parts []struct {
+		Type string `json:"type"`
+		Name string `json:"name"`
+	}
+	if json.Unmarshal(m.Message.Content, &parts) != nil {
+		return l // user turns carry content as a plain string
+	}
+	for _, p := range parts {
 		if p.Type == "tool_use" && p.Name != "" {
 			l.Kind, l.ToolName = "tool", p.Name
 			break
