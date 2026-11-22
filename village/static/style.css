@@ -14,8 +14,7 @@ body {
 }
 
 #stage {
-  width: min(100vw, 177.78vh);
-  height: min(56.25vw, 100vh);
+  flex: none;
   overflow: hidden;
   image-rendering: pixelated;
 }

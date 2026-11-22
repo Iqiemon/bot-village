@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>smoke: pending</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="smoke" width="480" height="270"></canvas>
+  <pre id="result"></pre>
+  <script src="art.js"></script>
+  <script src="town.js"></script>
+  <script>
+  (function () {
+    var checks = [];
+    function check(name, ok, detail) {
+      checks.push({ name: name, ok: !!ok, detail: detail == null ? "" : String(detail) });
+    }
+
+    var canvas = document.getElementById("smoke");
+    var town = globalThis.town.create(canvas);
+    town.draw(0);
+    var ctx = canvas.getContext("2d");
+
+    var names = Object.keys(globalThis.art.PALETTE);
+    var badHex = names.filter(function (k) {
+      return !/^#[0-9a-f]{6}$/.test(globalThis.art.PALETTE[k]);
+    });
+    check("palette 24 named #rrggbb colours", names.length === 24 && badHex.length === 0,
+      names.length + " entries, bad: " + badHex.join(","));
+
+    var b0 = globalThis.town.bandY(0), b1 = globalThis.town.bandY(1), b2 = globalThis.town.bandY(2);
+    var ints = [b0, b1, b2].every(function (v) {
+      return Number.isInteger(v) && v >= 0 && v <= 270;
+    });
+    check("bandY ordered integers in 0..270", ints && b0 < b1 && b1 < b2, [b0, b1, b2].join(","));
+
+    check("backing store 480x270", canvas.width === 480 && canvas.height === 270,
+      canvas.width + "x" + canvas.height);
+
+    function alpha(x, y) {
+      return ctx.getImageData(x, y, 1, 1).data[3];
+    }
+    check("sky and ground painted", alpha(0, 0) === 255 && alpha(0, 269) === 255,
+      alpha(0, 0) + "/" + alpha(0, 269));
+
+    var edges = [b0, b1, b2].map(function (y) {
+      return [].slice.call(ctx.getImageData(240, y - 1, 1, 2).data).join(",");
+    });
+    var split = edges.every(function (d) {
+      var p = d.split(",");
+      return p[0] !== p[4] || p[1] !== p[5] || p[2] !== p[6];
+    });
+    check("hard one-pixel band edges", split, edges.join(" | "));
+
+    var dc = document.createElement("canvas");
+    dc.width = 8; dc.height = 8;
+    var dctx = dc.getContext("2d");
+    function only(want) {
+      var d = dctx.getImageData(0, 0, 8, 8).data;
+      for (var i = 0; i < d.length; i += 4) {
+        var c = "#" + [d[i], d[i + 1], d[i + 2]].map(function (v) {
+          return ("0" + v.toString(16)).slice(-2);
+        }).join("");
+        if (d[i + 3] !== 255 || c !== want) return false;
+      }
+      return true;
+    }
+    globalThis.art.dither(dctx, 0, 0, 8, 8, "#000000", "#ffffff", 0);
+    var zero = only("#000000");
+    globalThis.art.dither(dctx, 0, 0, 8, 8, "#000000", "#ffffff", 1);
+    var one = only("#ffffff");
+    check("dither ratio 0 and 1 are pure", zero && one, (zero ? "r0 all c1" : "r0 leak") + ", " + (one ? "r1 all c2" : "r1 leak"));
+
+    var row = ctx.getImageData(0, b1 + 10, 480, 1).data;
+    var smeared = 0;
+    for (var i = 4; i < row.length; i += 4) {
+      if (row[i] !== row[0] || row[i + 1] !== row[1] || row[i + 2] !== row[2]) smeared++;
+    }
+    check("1x ground row is one colour across", smeared === 0, smeared + " differing pixels");
+
+    var up = document.createElement("canvas");
+    up.width = 1440; up.height = 810;
+    var uctx = up.getContext("2d");
+    uctx.imageSmoothingEnabled = false;
+    uctx.drawImage(canvas, 0, 0, 1440, 810);
+    var src = ctx.getImageData(0, 0, 480, 270).data;
+    var upData = uctx.getImageData(0, 0, 1440, 810).data;
+    var mismatch = null;
+    for (var y = 3; y < 270 && !mismatch; y += 13) {
+      for (var x = 2; x < 480; x += 11) {
+        var si = (y * 480 + x) * 4;
+        for (var dy = 0; dy < 3 && !mismatch; dy++) {
+          for (var dx = 0; dx < 3; dx++) {
+            var ui = ((y * 3 + dy) * 1440 + x * 3 + dx) * 4;
+            if (src[si] !== upData[ui] || src[si + 1] !== upData[ui + 1] || src[si + 2] !== upData[ui + 2]) {
+              mismatch = x + "," + y;
+              break;
+            }
+          }
+        }
+      }
+    }
+    check("3x upscale is nearest neighbour", !mismatch, mismatch ? "first mismatch at " + mismatch : "grid sampled");
+
+    function probe(w, h) {
+      return new Promise(function (resolve) {
+        var f = document.createElement("iframe");
+        f.style.cssText = "width:" + w + "px;height:" + h + "px;border:0;position:absolute;left:-9999px;top:0";
+        f.src = "index.html";
+        f.onload = function () {
+          f.contentWindow.requestAnimationFrame(function () {
+            setTimeout(function () {
+              var el = f.contentDocument.getElementById("stage");
+              var r = el.getBoundingClientRect();
+              resolve({
+                vw: f.contentWindow.innerWidth, vh: f.contentWindow.innerHeight,
+                w: r.width, h: r.height, top: r.top, left: r.left,
+                bottom: r.bottom, right: r.right,
+                img: f.contentWindow.getComputedStyle(el).imageRendering, inline: el.style.width + "x" + el.style.height
+              });
+              f.remove();
+            }, 50);
+          });
+        };
+        document.body.appendChild(f);
+      });
+    }
+
+    var CASES = [[480, 270], [1440, 810], [960, 257], [390, 700]];
+    Promise.all(CASES.map(function (c) { return probe(c[0], c[1]); })).then(function (got) {
+      got.forEach(function (p, i) {
+        var w = CASES[i][0], h = CASES[i][1];
+        var fit = Math.min(p.vw / 480, p.vh / 270);
+        var wantScale = fit >= 1 ? Math.floor(fit) : fit;
+        var inside = p.top >= 0 && p.left >= 0 && p.bottom <= p.vh + 0.01 && p.right <= p.vw + 0.01;
+        var proportion = Math.abs(p.w / p.h - 16 / 9) < 0.001;
+        var scaled = Math.abs(p.w - 480 * wantScale) < 0.5 && Math.abs(p.h - 270 * wantScale) < 0.5;
+        check("fit " + w + "x" + h + " keeps 16:9, scale " + wantScale.toFixed(4) + ", inside",
+          inside && proportion && scaled && p.img === "pixelated",
+          [p.vw + "x" + p.vh, p.inline, p.w.toFixed(2) + "x" + p.h.toFixed(2), p.img].join(" "));
+      });
+
+      var pass = checks.every(function (c) { return c.ok; });
+      globalThis.__smoke = { pass: pass, checks: checks };
+      document.title = pass ? "smoke: pass" : "smoke: fail";
+      document.getElementById("result").textContent = checks.map(function (c) {
+        return (c.ok ? "PASS " : "FAIL ") + c.name + (c.detail ? " (" + c.detail + ")" : "");
+      }).join("\n");
+    });
+  })();
+  </script>
+</body>
+</html>
