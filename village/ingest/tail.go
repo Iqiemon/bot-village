@@ -8,9 +8,8 @@ import (
 	"os"
 )
 
-// maxLine caps a transcript line; longer lines are emitted as unknown rather
-// than buffered without limit. shortcut: whole line buffered in memory, revisit
-// if transcripts ever carry multi-hundred-MB lines.
+// maxLine is the read buffer, so memory per line stays bounded; a longer line
+// is dropped and emitted as unknown.
 const maxLine = 1 << 20
 
 // Line is one parsed transcript line.
@@ -62,7 +61,7 @@ func (t *Tailer) Read() (int, error) {
 		return 0, err
 	}
 	if fi.Size() < t.offset {
-		t.offset = 0 // truncated or rewritten in place
+		t.offset = 0
 	}
 	if fi.Size() == t.offset {
 		return 0, nil
@@ -70,27 +69,40 @@ func (t *Tailer) Read() (int, error) {
 	if _, err := t.f.Seek(t.offset, io.SeekStart); err != nil {
 		return 0, err
 	}
-	data, err := io.ReadAll(t.f)
-	if err != nil {
-		return 0, err
-	}
-	end := bytes.LastIndexByte(data, '\n')
-	if end < 0 {
-		return 0, nil
-	}
-	for _, raw := range bytes.Split(data[:end], []byte{'\n'}) {
-		if len(raw) > 0 {
-			t.onLine(parseLine(raw))
+	buf := make([]byte, 0, maxLine)
+	consumed, long := 0, false
+	chunk := make([]byte, 64<<10)
+	for {
+		n, err := t.f.Read(chunk)
+		data := chunk[:n]
+		for len(data) > 0 {
+			i := bytes.IndexByte(data, '\n')
+			if i < 0 {
+				buf = append(buf, data...)
+				if len(buf) > maxLine {
+					buf, long = buf[:0], true
+				}
+				break
+			}
+			buf = append(buf, data[:i]...)
+			if long || len(buf) > maxLine {
+				t.onLine(Line{Kind: "unknown"})
+			} else {
+				t.onLine(parseLine(buf))
+			}
+			buf, long = buf[:0], false
+			data = data[i+1:]
+			consumed += i + 1
+		}
+		if err != nil {
+			break
 		}
 	}
-	t.offset += int64(end + 1)
-	return end + 1, nil
+	t.offset += int64(consumed)
+	return consumed, nil
 }
 
 func parseLine(raw []byte) Line {
-	if len(raw) > maxLine {
-		return Line{Kind: "unknown"}
-	}
 	var m struct {
 		Type    string `json:"type"`
 		Message *struct {

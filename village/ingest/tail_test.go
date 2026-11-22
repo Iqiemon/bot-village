@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-// newTailer creates an empty transcript and starts tailing it.
 func newTailer(t *testing.T, lines *[]Line) (*Tailer, string) {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "s.jsonl")
@@ -120,8 +119,8 @@ func TestLongLineIsTruncatedNotFatal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n == 0 || len(lines) != 1 {
-		t.Fatalf("n=%d lines=%d", n, len(lines))
+	if n == 0 || len(lines) != 1 || lines[0].Kind != "unknown" {
+		t.Fatalf("n=%d lines=%+v", n, lines)
 	}
 }
 
