@@ -7,8 +7,6 @@ import (
 	"image/png"
 )
 
-// palette is the fixed set of critter colours; avatar bytes come from the
-// session id, so a face never changes between runs.
 var palette = []color.NRGBA{
 	{0xf2, 0xb5, 0x8c, 0xff}, {0xe8, 0x8f, 0x9a, 0xff}, {0x9a, 0xd1, 0x8a, 0xff},
 	{0x8f, 0xb8, 0xe8, 0xff}, {0xd9, 0xb4, 0xe8, 0xff}, {0xf2, 0xd6, 0x7a, 0xff},
@@ -53,7 +51,7 @@ func AvatarPNG(sessionID string) []byte {
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
-		panic(err) // an in-memory NRGBA encode cannot fail
+		panic(err)
 	}
 	return buf.Bytes()
 }

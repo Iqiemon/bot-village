@@ -55,8 +55,6 @@ func Build(sessions []ingest.LiveSession, titles map[string]string) []Villager {
 	return out
 }
 
-// shortID is 4 hex digits of the session id's hash; short enough for a nametag,
-// wide enough that two sessions in one folder almost never share a name.
 func shortID(sessionID string) string {
 	h := fnv.New32a()
 	h.Write([]byte(sessionID))
