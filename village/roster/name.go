@@ -10,11 +10,11 @@ import (
 
 // Villager is one session's presence in the village.
 type Villager struct {
-	SessionID string
-	Name      string
-	Title     string
-	Slug      string
-	Seed      uint64
+	SessionID string `json:"sessionId"`
+	Name      string `json:"name"`
+	Title     string `json:"title,omitempty"`
+	Slug      string `json:"slug"`
+	Seed      uint64 `json:"seed"`
 }
 
 // Build names each session from its own slug and session id. A name never
