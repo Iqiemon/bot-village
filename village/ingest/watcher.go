@@ -42,6 +42,7 @@ type Watcher struct {
 	done     chan struct{}
 	sessions map[string]*watched
 	pending  map[string]Event
+	expiry   map[string]time.Time
 	burst    *time.Timer
 	watched  map[string]bool
 }
@@ -59,6 +60,7 @@ func NewWatcher(cfg WatcherConfig) *Watcher {
 		done:     make(chan struct{}),
 		sessions: map[string]*watched{},
 		pending:  map[string]Event{},
+		expiry:   map[string]time.Time{},
 		watched:  map[string]bool{},
 	}
 }
@@ -141,6 +143,12 @@ func (w *Watcher) scan() {
 	for _, dir := range w.cfg.DataDirs {
 		sessions, err := ScanSessions(dir)
 		if err != nil {
+			// A transient read error must not remove live villagers.
+			for id, sess := range w.sessions {
+				if sess.dataDir == dir {
+					live[id] = sess
+				}
+			}
 			continue
 		}
 		for _, s := range sessions {
@@ -167,7 +175,13 @@ func (w *Watcher) scan() {
 			sess.tail.Close()
 		}
 		delete(w.sessions, id)
-		delete(w.pending, id)
+		delete(w.expiry, id)
+		if ev, ok := w.pending[id]; ok {
+			delete(w.pending, id)
+			if !w.emit(ev) {
+				return
+			}
+		}
 		if !w.emit(Event{Kind: "gone", SessionID: id, At: time.Now()}) {
 			return
 		}
@@ -199,19 +213,45 @@ func (w *Watcher) readAll() {
 
 func (w *Watcher) record(id string, l Line) {
 	w.pending[id] = Event{Kind: "activity", SessionID: id, ToolName: l.ToolName, Role: l.Role, At: time.Now()}
-	if w.burst == nil {
-		w.burst = time.NewTimer(w.cfg.BurstWindow)
+	if _, ok := w.expiry[id]; !ok {
+		w.expiry[id] = time.Now().Add(w.cfg.BurstWindow)
+		w.arm()
 	}
 }
 
-func (w *Watcher) flush() {
-	w.burst = nil
-	for id, ev := range w.pending {
-		delete(w.pending, id)
-		if !w.emit(ev) {
-			return
+// arm points the single timer at the earliest per-session expiry.
+func (w *Watcher) arm() {
+	var next time.Time
+	for _, at := range w.expiry {
+		if next.IsZero() || at.Before(next) {
+			next = at
 		}
 	}
+	if w.burst != nil {
+		w.burst.Stop()
+		w.burst = nil
+	}
+	if !next.IsZero() {
+		w.burst = time.NewTimer(time.Until(next))
+	}
+}
+
+// flush emits one activity per session whose own burst window has closed.
+func (w *Watcher) flush() {
+	now := time.Now()
+	for id, at := range w.expiry {
+		if at.After(now) {
+			continue
+		}
+		delete(w.expiry, id)
+		if ev, ok := w.pending[id]; ok {
+			delete(w.pending, id)
+			if !w.emit(ev) {
+				return
+			}
+		}
+	}
+	w.arm()
 }
 
 func (w *Watcher) emit(ev Event) bool {
