@@ -1,0 +1,30 @@
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #14141c;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c8c8d4;
+  font: 12px/1.4 monospace;
+}
+
+#stage {
+  width: min(100vw, 177.78vh);
+  height: min(56.25vw, 100vh);
+  overflow: hidden;
+  image-rendering: pixelated;
+}
+
+.hint {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  margin: 0;
+  text-align: center;
+}
