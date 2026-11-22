@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>smoke: pending</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <canvas id="smoke" width="480" height="270"></canvas>
@@ -102,12 +103,51 @@
     }
     check("3x upscale is nearest neighbour", !mismatch, mismatch ? "first mismatch at " + mismatch : "grid sampled");
 
-    var pass = checks.every(function (c) { return c.ok; });
-    globalThis.__smoke = { pass: pass, checks: checks };
-    document.title = pass ? "smoke: pass" : "smoke: fail";
-    document.getElementById("result").textContent = checks.map(function (c) {
-      return (c.ok ? "PASS " : "FAIL ") + c.name + (c.detail ? " (" + c.detail + ")" : "");
-    }).join("\n");
+    function probe(w, h) {
+      return new Promise(function (resolve) {
+        var f = document.createElement("iframe");
+        f.style.cssText = "width:" + w + "px;height:" + h + "px;border:0;position:absolute;left:-9999px;top:0";
+        f.src = "index.html";
+        f.onload = function () {
+          f.contentWindow.requestAnimationFrame(function () {
+            setTimeout(function () {
+              var el = f.contentDocument.getElementById("stage");
+              var r = el.getBoundingClientRect();
+              resolve({
+                vw: f.contentWindow.innerWidth, vh: f.contentWindow.innerHeight,
+                w: r.width, h: r.height, top: r.top, left: r.left,
+                bottom: r.bottom, right: r.right,
+                img: f.contentWindow.getComputedStyle(el).imageRendering, inline: el.style.width + "x" + el.style.height
+              });
+              f.remove();
+            }, 50);
+          });
+        };
+        document.body.appendChild(f);
+      });
+    }
+
+    var CASES = [[480, 270], [1440, 810], [960, 257], [390, 700]];
+    Promise.all(CASES.map(function (c) { return probe(c[0], c[1]); })).then(function (got) {
+      got.forEach(function (p, i) {
+        var w = CASES[i][0], h = CASES[i][1];
+        var fit = Math.min(p.vw / 480, p.vh / 270);
+        var wantScale = fit >= 1 ? Math.floor(fit) : fit;
+        var inside = p.top >= 0 && p.left >= 0 && p.bottom <= p.vh + 0.01 && p.right <= p.vw + 0.01;
+        var proportion = Math.abs(p.w / p.h - 16 / 9) < 0.001;
+        var scaled = Math.abs(p.w - 480 * wantScale) < 0.5 && Math.abs(p.h - 270 * wantScale) < 0.5;
+        check("fit " + w + "x" + h + " keeps 16:9, scale " + wantScale.toFixed(4) + ", inside",
+          inside && proportion && scaled && p.img === "pixelated",
+          [p.vw + "x" + p.vh, p.inline, p.w.toFixed(2) + "x" + p.h.toFixed(2), p.img].join(" "));
+      });
+
+      var pass = checks.every(function (c) { return c.ok; });
+      globalThis.__smoke = { pass: pass, checks: checks };
+      document.title = pass ? "smoke: pass" : "smoke: fail";
+      document.getElementById("result").textContent = checks.map(function (c) {
+        return (c.ok ? "PASS " : "FAIL ") + c.name + (c.detail ? " (" + c.detail + ")" : "");
+      }).join("\n");
+    });
   })();
   </script>
 </body>

@@ -4,8 +4,9 @@
   var town = globalThis.town.create(canvas);
 
   function fit() {
-    var scale = Math.floor(Math.min(innerWidth / town.W, innerHeight / town.H));
-    if (scale < 1) scale = 1;
+    var room = Math.min(innerWidth / town.W, innerHeight / town.H);
+    // shortcut: below 1x the ground is resampled, not sharp; upgrade if sub-1x becomes a target.
+    var scale = room >= 1 ? Math.floor(room) : room;
     canvas.style.width = town.W * scale + "px";
     canvas.style.height = town.H * scale + "px";
   }
