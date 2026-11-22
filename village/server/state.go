@@ -8,8 +8,7 @@ import (
 	"botvillage/roster"
 )
 
-// State is the live roster. Spawn adds a villager, gone removes it; activity
-// changes nothing on the roster, only what gets broadcast.
+// State is the live roster.
 type State struct {
 	mu     sync.Mutex
 	titles map[string]string

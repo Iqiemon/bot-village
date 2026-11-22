@@ -7,7 +7,6 @@ import (
 	"botvillage/roster"
 )
 
-// routes adds the roster API and the websocket hub.
 func (v *Village) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/villagers", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

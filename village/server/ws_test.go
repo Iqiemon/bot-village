@@ -7,7 +7,6 @@ func TestSlowClientIsDropped(t *testing.T) {
 	slow := h.add()
 	fast := h.add()
 
-	// Fill only the slow client's buffer, then one broadcast overflows it.
 	for i := 0; i < cap(slow); i++ {
 		slow <- nil
 	}
