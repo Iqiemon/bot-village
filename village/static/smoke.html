@@ -10,6 +10,7 @@
   <pre id="result"></pre>
   <script src="art.js"></script>
   <script src="town.js"></script>
+  <script src="audio.js"></script>
   <script>
   (function () {
     var checks = [];
@@ -102,6 +103,38 @@
       }
     }
     check("3x upscale is nearest neighbour", !mismatch, mismatch ? "first mismatch at " + mismatch : "grid sampled");
+
+    check("hour() honours ?hour=22", globalThis.town.hour("?hour=22") === 22 &&
+      globalThis.town.hour("") === new Date().getHours(), globalThis.town.hour("?hour=22"));
+
+    function pixels(h) {
+      var c = document.createElement("canvas");
+      c.width = 480; c.height = 270;
+      globalThis.town.create(c, h).draw(0);
+      var d = c.getContext("2d").getImageData(0, 0, 480, 270).data;
+      return [].slice.call(d);
+    }
+    var noon = pixels(12), night = pixels(22);
+    var differs = 0;
+    for (var px = 0; px < noon.length; px += 4) {
+      if (noon[px] !== night[px] || noon[px + 1] !== night[px + 1] || noon[px + 2] !== night[px + 2]) differs++;
+    }
+    check("hour 22 palette differs from noon", differs > 0 && noon.length === night.length, differs + " px differ");
+    check("night is darker at one ground pixel", night[(200 * 480 + 240) * 4] < noon[(200 * 480 + 240) * 4],
+      noon[(200 * 480 + 240) * 4] + " -> " + night[(200 * 480 + 240) * 4]);
+
+    check("no AudioContext before a gesture", !globalThis.audio.unlocked(), "unlocked: " + globalThis.audio.unlocked());
+    globalThis.audio.unlock();
+    var n0 = globalThis.audio.scheduled();
+    globalThis.audio.setMuted(true);
+    globalThis.audio.blip("talk");
+    check("muting prevents a blip from being scheduled",
+      globalThis.audio.isMuted() && globalThis.audio.scheduled() === n0,
+      "scheduled " + n0 + " -> " + globalThis.audio.scheduled());
+    globalThis.audio.setMuted(false);
+    globalThis.audio.blip("talk");
+    check("an unmuted blip is synthesized", globalThis.audio.scheduled() === n0 + 1,
+      "scheduled " + n0 + " -> " + globalThis.audio.scheduled());
 
     function probe(w, h) {
       return new Promise(function (resolve) {

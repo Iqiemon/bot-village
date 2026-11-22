@@ -1,13 +1,25 @@
 (function (g) {
   var W = 480, H = 270;
   var BANDS = [128, 178, 228];
-  var P = g.art.PALETTE;
+
+  function hour(search) {
+    var m = /[?&]hour=(\d+)/.exec(search == null ? location.search : search);
+    return m ? Math.min(23, +m[1]) : new Date().getHours();
+  }
+
+  function isNight(h) {
+    return h < 6 || h >= 19;
+  }
+
+  function palette(h) {
+    return isNight(h) ? g.art.NIGHT : g.art.PALETTE;
+  }
 
   function bandY(i) {
     return BANDS[i];
   }
 
-  function paint(ctx) {
+  function paint(ctx, P) {
     var sky = [
       [44, "sky0"],
       [52, "sky0", "sky1"],
@@ -38,13 +50,13 @@
     });
   }
 
-  function create(canvas) {
+  function create(canvas, h) {
     canvas.width = W;
     canvas.height = H;
     var scene = document.createElement("canvas");
     scene.width = W;
     scene.height = H;
-    paint(scene.getContext("2d"));
+    paint(scene.getContext("2d"), palette(h == null ? hour() : h));
     var ctx = canvas.getContext("2d");
     return {
       draw: function (t) {
@@ -55,5 +67,5 @@
     };
   }
 
-  g.town = { W: W, H: H, bandY: bandY, create: create };
+  g.town = { W: W, H: H, bandY: bandY, create: create, hour: hour, palette: palette };
 })(globalThis);
