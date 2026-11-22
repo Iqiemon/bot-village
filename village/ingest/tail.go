@@ -95,6 +95,9 @@ func (t *Tailer) Read() (int, error) {
 			consumed += i + 1
 		}
 		if err != nil {
+			if err != io.EOF {
+				return consumed, err
+			}
 			break
 		}
 	}
