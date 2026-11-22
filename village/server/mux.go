@@ -6,8 +6,7 @@ import (
 	"botvillage/static"
 )
 
-// NewMux serves the embedded static files. cfg is unused until later routes
-// need it.
+// NewMux serves the embedded static files.
 func NewMux(cfg Config) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServerFS(static.FS))

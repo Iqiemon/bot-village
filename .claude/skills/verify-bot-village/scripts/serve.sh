@@ -1,11 +1,7 @@
 #!/bin/sh
-# Launch Bot Village for verification and wait until it answers.
-#
 #   scripts/serve.sh start <port> <data-dir> [--demo]
 #   scripts/serve.sh doctor <port>
 #   scripts/serve.sh stop <port>
-#
-# start prints the pid file path. stop kills only the process this script started.
 
 set -eu
 

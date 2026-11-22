@@ -12,7 +12,6 @@ Work from the repo root. Helpers live in `scripts/` next to this file and are in
 ## Launch
 
 ```sh
-# Build, start on a free port with a disposable data dir, wait until GET / answers.
 .claude/skills/verify-bot-village/scripts/serve.sh start 8041 /tmp/bv-verify-$USER/data
 ```
 

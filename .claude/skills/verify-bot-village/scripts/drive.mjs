@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Drives the Bot Village page in headless Chrome over the DevTools protocol.
-//
 //   node scripts/drive.mjs --url http://127.0.0.1:8040/ [--eval "expr"] [--wait selector] [--shot out.png]
 //
 // Prints one JSON object on stdout: {ok, url, title, result, screenshot}.
