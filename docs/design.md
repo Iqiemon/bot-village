@@ -51,12 +51,12 @@ Things that would make this a failure even if it ran:
 
 ## What Claude Code gives us
 
-Verified on disk, from a running DawnMerge project home:
+Claude Code's own folder on this machine (`<data>`, `~/.claude` by default) holds:
 
 ```
-<data>/.home/.claude/sessions/14676.json
+<data>/sessions/<pid>.json
   { pid, sessionId, cwd, startedAt, updatedAt, status: "busy" | "idle", ... }
-<data>/.home/.claude/projects/<slug>/<sessionId>.jsonl
+<data>/projects/<slug>/<sessionId>.jsonl
   append-only session transcript, typed lines (user, assistant, tool results…)
 ```
 
@@ -75,7 +75,7 @@ That maps onto the reference cleanly:
 avatar. The reference gets these from `profile.json`; we invent them:
 
 - **Name** — from the project folder name, plus a short id suffix when two
-  sessions share a folder (`DawnMerge`, `DawnMerge-3f2a`).
+  sessions share a folder (`my-app`, `my-app-3f2a`).
 - **Title** — optional, from a `village.json` beside the data directory.
   Unset is fine; the card simply omits the line.
 - **Avatar** — generated deterministically from the session id, never random
@@ -175,8 +175,8 @@ produces a `gone` event.
 
 The server listens on `0.0.0.0:8040` so a Tailscale node can reach it.
 
-`--data` may be passed more than once; it defaults to `~/.claude`, which also
-covers DawnMerge's isolated per-project homes. `--demo` generates ten to twelve
+`--data` may be passed more than once; it defaults to `~/.claude`, the Claude
+Code folder of the machine the village runs on. `--demo` generates ten to twelve
 fake sessions in a temp directory that append real JSONL, so the village is
 watchable with nothing running.
 

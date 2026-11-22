@@ -156,21 +156,21 @@ git commit -m "feat: session prompt transport with unreachable reporting"
 - Produces: `ingest.LiveSession{PID int; SessionID, CWD, Slug, SocketPath, Status string; UpdatedAt time.Time}`.
 - Produces: `ingest.ScanSessions(dataDir string) ([]LiveSession, error)`.
 
-Reads `<dataDir>/.home/.claude/sessions/*.json`, skipping unparseable files and returning empty (no error) when the directory is absent.
+Reads `<dataDir>/sessions/*.json` (`dataDir` is Claude Code's folder, `~/.claude` by default), skipping unparseable files and returning empty (no error) when the directory is absent.
 
 - [ ] **Step 1: Write the failing test**
 
 ```go
 func TestScanReadsSessionsAndSkipsGarbage(t *testing.T) {
 	dir := t.TempDir()
-	write(t, filepath.Join(dir, ".home/.claude/sessions/14676.json"),
-		`{"pid":14676,"sessionId":"d91c","cwd":"E:\\Projects\\DawnMerge","status":"busy","updatedAt":1795357608275,"messagingSocketPath":"\\\\.\\pipe\\x"}`)
-	write(t, filepath.Join(dir, ".home/.claude/sessions/9.json"), `{oops`)
+	write(t, filepath.Join(dir, "sessions/4242.json"),
+		`{"pid":4242,"sessionId":"s-1","cwd":"/home/me/My App","status":"busy","updatedAt":1795357608275,"messagingSocketPath":"/tmp/s-1.sock"}`)
+	write(t, filepath.Join(dir, "sessions/9.json"), `{oops`)
 	got, err := ScanSessions(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].SessionID != "d91c" || got[0].Status != "busy" {
+	if len(got) != 1 || got[0].SessionID != "s-1" || got[0].Status != "busy" {
 		t.Fatalf("%+v", got)
 	}
 	if got[0].Slug == "" {
@@ -193,7 +193,7 @@ Expected: FAIL — `ScanSessions` undefined.
 
 - [ ] **Step 3: Implement `ScanSessions`**
 
-Slug is the final element of `cwd` with non-alphanumerics collapsed and lowercased (`DawnMerge` → `dawnmerge`).
+Slug is the final element of `cwd` with non-alphanumerics collapsed and lowercased (`My App` → `my-app`).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -343,7 +343,7 @@ git commit -m "feat: coalesce transcript bursts into activity events"
 
 ```go
 func TestSameSlugGetsDistinctStableNames(t *testing.T) {
-	// two sessions, same cwd: names "dawnmerge" and "dawnmerge-<4 hex>", identical on repeat calls
+	// two sessions, same cwd: names "my-app" and "my-app-<4 hex>", identical on repeat calls
 }
 
 func TestAvatarIsDeterministic(t *testing.T) {
@@ -737,7 +737,7 @@ git commit -m "feat: demo mode with twelve fake villagers"
 
 - [ ] **Step 1: Write it**
 
-Demo, live mode (`--data` pointed at `~/.claude` and at a DawnMerge project home), `0.0.0.0:8040`, Tailscale access, the `village.json` format, `?hour=`, `M`, and an explicit line that demo delivery is faked and that live delivery depends on the session socket.
+Demo, live mode (`--data` defaulting to `~/.claude`, and passed more than once for extra Claude Code folders), `0.0.0.0:8040`, Tailscale access, the `village.json` format, `?hour=`, `M`, and an explicit line that demo delivery is faked and that live delivery depends on the session socket.
 
 - [ ] **Step 2: Verify**
 
