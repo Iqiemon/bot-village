@@ -99,6 +99,30 @@ func TestTruncationResetsOffset(t *testing.T) {
 	}
 }
 
+func TestReplacingTranscriptWithLargerFileResetsOffset(t *testing.T) {
+	var lines []Line
+	tr, p := newTailer(t, &lines)
+	appendFile(t, p, `{"type":"user"}`+"\n"+`{"type":"assistant"}`+"\n")
+	if _, err := tr.Read(); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"type":"assistant"}` + "\n" + `{"type":"user"}` + "\n" + `{"type":"assistant"}` + "\n"
+	tmp := p + ".tmp"
+	if err := os.WriteFile(tmp, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmp, p); err != nil {
+		t.Fatal(err)
+	}
+	n, err := tr.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != len(body) || len(lines) != 5 {
+		t.Fatalf("replaced transcript skipped: n=%d lines=%+v", n, lines)
+	}
+}
+
 func TestUnknownJSONIsKindUnknown(t *testing.T) {
 	var lines []Line
 	tr, p := newTailer(t, &lines)
@@ -114,13 +138,34 @@ func TestUnknownJSONIsKindUnknown(t *testing.T) {
 func TestLongLineIsTruncatedNotFatal(t *testing.T) {
 	var lines []Line
 	tr, p := newTailer(t, &lines)
-	appendFile(t, p, `{"type":"assistant","message":{"role":"assistant","content":"`+strings.Repeat("a", 2<<20)+`"}}`+"\n")
+	body := `{"type":"assistant","message":{"role":"assistant","content":"` + strings.Repeat("a", 2<<20) + `"}}` + "\n"
+	appendFile(t, p, body)
 	n, err := tr.Read()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n == 0 || len(lines) != 1 || lines[0].Kind != "unknown" {
+	if n != len(body) || len(lines) != 1 || lines[0].Kind != "unknown" {
 		t.Fatalf("n=%d lines=%+v", n, lines)
+	}
+	if n, err := tr.Read(); err != nil || n != 0 || len(lines) != 1 {
+		t.Fatalf("second Read n=%d err=%v lines=%+v", n, err, lines)
+	}
+}
+
+func TestValidLineSpanningChunksIsConsumedOnce(t *testing.T) {
+	var lines []Line
+	tr, p := newTailer(t, &lines)
+	body := `{"type":"assistant","message":{"role":"assistant","content":"` + strings.Repeat("a", 200<<10) + `"}}` + "\n"
+	appendFile(t, p, body)
+	n, err := tr.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != len(body) || len(lines) != 1 || lines[0].Kind != "message" {
+		t.Fatalf("n=%d lines=%+v", n, lines)
+	}
+	if n, err := tr.Read(); err != nil || n != 0 || len(lines) != 1 {
+		t.Fatalf("second Read n=%d err=%v lines=%+v", n, err, lines)
 	}
 }
 

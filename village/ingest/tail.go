@@ -24,6 +24,7 @@ type Line struct {
 // and never advances the offset.
 type Tailer struct {
 	f      *os.File
+	path   string
 	offset int64
 	onLine func(Line)
 }
@@ -47,7 +48,7 @@ func NewTailer(path string, onLine func(Line)) (*Tailer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Tailer{f: f, offset: off, onLine: onLine}, nil
+	return &Tailer{f: f, path: path, offset: off, onLine: onLine}, nil
 }
 
 // Close releases the held file.
@@ -56,9 +57,21 @@ func (t *Tailer) Close() error { return t.f.Close() }
 // Read emits every complete line appended since the last call and returns the
 // number of bytes consumed. A partial trailing line is left for the next call.
 func (t *Tailer) Read() (int, error) {
-	fi, err := t.f.Stat()
+	fi, err := os.Stat(t.path)
 	if err != nil {
 		return 0, err
+	}
+	cur, err := t.f.Stat()
+	if err != nil {
+		return 0, err
+	}
+	if !os.SameFile(fi, cur) { // replaced, not appended, so start over
+		f, err := os.Open(t.path)
+		if err != nil {
+			return 0, err
+		}
+		t.f.Close()
+		t.f, t.offset = f, 0
 	}
 	if fi.Size() < t.offset {
 		t.offset = 0
@@ -70,7 +83,7 @@ func (t *Tailer) Read() (int, error) {
 		return 0, err
 	}
 	buf := make([]byte, 0, maxLine)
-	consumed, long := 0, false
+	consumed, pending, long := 0, 0, false
 	chunk := make([]byte, 64<<10)
 	for {
 		n, err := t.f.Read(chunk)
@@ -82,6 +95,7 @@ func (t *Tailer) Read() (int, error) {
 				if len(buf) > maxLine {
 					buf, long = buf[:0], true
 				}
+				pending += len(data)
 				break
 			}
 			buf = append(buf, data[:i]...)
@@ -91,11 +105,13 @@ func (t *Tailer) Read() (int, error) {
 				t.onLine(parseLine(buf))
 			}
 			buf, long = buf[:0], false
+			consumed += pending + i + 1
+			pending = 0
 			data = data[i+1:]
-			consumed += i + 1
 		}
 		if err != nil {
 			if err != io.EOF {
+				t.offset += int64(consumed)
 				return consumed, err
 			}
 			break
