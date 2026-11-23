@@ -2,6 +2,7 @@
   var canvas = document.getElementById("stage");
   if (!canvas) return;
   var town = globalThis.town.create(canvas);
+  var folk = globalThis.villagers.create();
 
   function fit() {
     var room = Math.min(innerWidth / town.W, innerHeight / town.H);
@@ -29,8 +30,21 @@
     }
   });
 
+  var ws;
+  function connect() {
+    ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+    ws.onmessage = function (e) {
+      var msg = JSON.parse(e.data);
+      if (msg.type === "roster") folk.applyRoster(msg.villagers);
+      else folk.onActivity(msg);
+    };
+    ws.onclose = function () { setTimeout(connect, 1000); };
+  }
+  connect();
+
   function frame(t) {
     town.draw(t);
+    folk.draw(canvas.getContext("2d"), t);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
