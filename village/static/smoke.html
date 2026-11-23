@@ -10,6 +10,7 @@
   <pre id="result"></pre>
   <script src="art.js"></script>
   <script src="town.js"></script>
+  <script src="villagers.js"></script>
   <script src="audio.js"></script>
   <script>
   (function () {
@@ -135,6 +136,108 @@
     globalThis.audio.blip("talk");
     check("an unmuted blip is synthesized", globalThis.audio.scheduled() === n0 + 1,
       "scheduled " + n0 + " -> " + globalThis.audio.scheduled());
+
+    function census() {
+      var vc = document.createElement("canvas");
+      vc.width = 480; vc.height = 270;
+      globalThis.villagers.draw(vc.getContext("2d"), 12);
+      var top = vc.getContext("2d").getImageData(0, 0, 480, 270).data;
+      var px = 0, marks = 0, on = false;
+      for (var q = 0; q < 480; q++) {
+        var lit = false;
+        for (var r = 0; r < 270; r++) {
+          var k = (r * 480 + q) * 4;
+          if (top[k] || top[k + 1] || top[k + 2] || top[k + 3]) {
+            lit = true;
+            px++;
+          }
+        }
+        if (lit && !on) marks++;
+        on = lit;
+      }
+      return { px: px, marks: marks };
+    }
+
+    globalThis.villagers.applyRoster([
+      { sessionId: "alpha", name: "alpha-1f2e3d4c", seed: 1569418667 },
+      { sessionId: "beta", name: "beta-5a6b7c8d", seed: 2944525511 }
+    ]);
+    var alpha0 = globalThis.villagers.get("alpha");
+    var beta0 = globalThis.villagers.get("beta");
+    check("spawn starts at the map edge and walks on",
+      (alpha0.x < 0 || alpha0.x > 480) && alpha0.state === "walking" &&
+      (beta0.x < 0 || beta0.x > 480) && beta0.state === "walking",
+      "alpha " + alpha0.x + " beta " + beta0.x);
+
+    globalThis.villagers.applyRoster([
+      { sessionId: "alpha", name: "alpha-1f2e3d4c", seed: 1569418667 },
+      { sessionId: "beta", name: "beta-5a6b7c8d", seed: 2944525511 }
+    ]);
+    var alpha = globalThis.villagers.get("alpha");
+    var beta = globalThis.villagers.get("beta");
+    for (var settle = 0; settle < 10; settle++) {
+      globalThis.villagers.draw(document.createElement("canvas").getContext("2d"), 12, 1);
+    }
+
+    var first = census();
+    check("two spawns walk on and draw two villagers",
+      first.marks === 2 && alpha.state === "idle" && beta.state === "idle",
+      first.marks + " marks, " + first.px + " px, " + alpha.state + "/" + beta.state);
+
+    check("pick inside returns the right id, null outside",
+      globalThis.villagers.pick(alpha.x, alpha.y - 8) === "alpha" &&
+      globalThis.villagers.pick(beta.x, beta.y - 8) === "beta" &&
+      globalThis.villagers.pick(200, 120) === null &&
+      globalThis.villagers.pick(240, 240) === null,
+      "alpha " + alpha.x + "," + alpha.y + " beta " + beta.x + "," + beta.y);
+
+    var betaX = beta.x;
+    globalThis.villagers.onActivity({ sessionId: "alpha", tool: "Bash" });
+    globalThis.villagers.draw(document.createElement("canvas").getContext("2d"), 12, 0.2);
+    check("activity walks the villager toward its work spot",
+      alpha.state === "walking" && alpha.targetX === alpha.workX &&
+      alpha.x !== alpha.targetX && globalThis.villagers.pick(alpha.x, alpha.y - 8) === "alpha",
+      alpha.state + " x " + alpha.x + " -> " + alpha.targetX);
+    check("an idle villager stays put", beta.x === betaX, betaX + " -> " + beta.x);
+
+    globalThis.villagers.applyRoster([{ sessionId: "beta", name: "beta-5a6b7c8d", seed: 2944525511 }]);
+    check("a session missing from the roster drops its villager",
+      globalThis.villagers.get("alpha") == null, "alpha " + globalThis.villagers.get("alpha"));
+    globalThis.villagers.applyRoster([]);
+    check("empty roster draws nothing", census().px === 0, census().px + " px");
+
+    // Same column, 3px apart: the front villager covers the back one.
+    function solo(ids) {
+      globalThis.villagers.applyRoster(ids.map(function (id) {
+        return { sessionId: id, name: id, seed: id === "back" ? 0 : 25602 };
+      }));
+      var c2 = document.createElement("canvas");
+      c2.width = 480; c2.height = 270;
+      for (var k2 = 0; k2 < 10; k2++) {
+        globalThis.villagers.draw(c2.getContext("2d"), 12, 1);
+      }
+      var v = globalThis.villagers.get(ids[0]);
+      return [].slice.call(c2.getContext("2d").getImageData(
+        Math.round(v.x), Math.round(v.y) - 10, 1, 1).data);
+    }
+    var both = solo(["front", "back"]);
+    var frontOnly = solo(["front"]);
+    var backOnly = solo(["back"]);
+    check("billboards depth sort by y, front drawn over back",
+      both.join() === frontOnly.join() && both.join() !== backOnly.join(),
+      "both " + both.slice(0, 3) + " front " + frontOnly.slice(0, 3) + " back " + backOnly.slice(0, 3));
+    globalThis.villagers.applyRoster([]);
+
+    globalThis.villagers.applyRoster(
+      Array.from({ length: 30 }, function (_, i) {
+        return { sessionId: "s" + i, name: "villager-" + i, seed: (i + 1) * 2654435761 };
+      })
+    );
+    var t0 = performance.now();
+    for (var f = 0; f < 120; f++) globalThis.villagers.draw(ctx, 12);
+    var per = (performance.now() - t0) / 120;
+    check("30 villagers draw in under 16.7ms per frame", per < 16.7, per.toFixed(2) + "ms/frame");
+    globalThis.villagers.applyRoster([]);
 
     function probe(w, h) {
       return new Promise(function (resolve) {

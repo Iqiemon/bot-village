@@ -29,8 +29,25 @@
     }
   });
 
+  var ctx = canvas.getContext("2d");
+  var hour = globalThis.town.hour();
+
+  function connect() {
+    var ws = new WebSocket(
+      (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws"
+    );
+    ws.onmessage = function (e) {
+      var msg = JSON.parse(e.data);
+      if (msg.type === "roster") globalThis.villagers.applyRoster(msg.villagers);
+      else if (msg.type === "activity") globalThis.villagers.onActivity(msg);
+    };
+    ws.onclose = function () { setTimeout(connect, 1000); };
+  }
+  connect();
+
   function frame(t) {
     town.draw(t);
+    globalThis.villagers.draw(ctx, hour);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
