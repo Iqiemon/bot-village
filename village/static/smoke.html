@@ -158,9 +158,30 @@
       return { px: px, marks: marks };
     }
 
+    // Villagers drawn alone on a blank canvas, so pixel reads see only villager paint.
+    function snapshot() {
+      var sc = document.createElement("canvas");
+      sc.width = 480; sc.height = 270;
+      globalThis.villagers.draw(sc.getContext("2d"), 12);
+      return sc.getContext("2d").getImageData(0, 0, 480, 270);
+    }
+    function paintAt(img, x, y) {
+      var k = (Math.round(y) * 480 + Math.round(x)) * 4;
+      return "#" + [img.data[k], img.data[k + 1], img.data[k + 2]].map(function (v) {
+        return ("0" + v.toString(16)).slice(-2);
+      }).join("");
+    }
+    function litAt(img, x, y) {
+      return img.data[(Math.round(y) * 480 + Math.round(x)) * 4 + 3] > 0;
+    }
+
+    // Real seeds are uint64 hashes sent as decimal strings. These two round to
+    // the same float64 but differ in their low bits, so a client that parses
+    // them as numbers collapses them to one avatar.
+    var SEED_A = "18446744073709550591", SEED_B = "18446744073709548798";
     globalThis.villagers.applyRoster([
-      { sessionId: "alpha", name: "alpha-1f2e3d4c", seed: 1569418667 },
-      { sessionId: "beta", name: "beta-5a6b7c8d", seed: 2944525511 }
+      { sessionId: "alpha", name: "alpha-1f2e3d4c", seed: SEED_A },
+      { sessionId: "beta", name: "beta-5a6b7c8d", seed: SEED_B }
     ]);
     var alpha0 = globalThis.villagers.get("alpha");
     var beta0 = globalThis.villagers.get("beta");
@@ -170,8 +191,8 @@
       "alpha " + alpha0.x + " beta " + beta0.x);
 
     globalThis.villagers.applyRoster([
-      { sessionId: "alpha", name: "alpha-1f2e3d4c", seed: 1569418667 },
-      { sessionId: "beta", name: "beta-5a6b7c8d", seed: 2944525511 }
+      { sessionId: "alpha", name: "alpha-1f2e3d4c", seed: SEED_A },
+      { sessionId: "beta", name: "beta-5a6b7c8d", seed: SEED_B }
     ]);
     var alpha = globalThis.villagers.get("alpha");
     var beta = globalThis.villagers.get("beta");
@@ -184,11 +205,17 @@
       first.marks === 2 && alpha.state === "idle" && beta.state === "idle",
       first.marks + " marks, " + first.px + " px, " + alpha.state + "/" + beta.state);
 
+    var snap = snapshot();
+    var bodyA = paintAt(snap, alpha.x, alpha.y - 7);
+    var bodyB = paintAt(snap, beta.x, beta.y - 7);
+    check("full-width uint64 seeds keep their low bits: distinct avatars",
+      bodyA !== bodyB, bodyA + " vs " + bodyB);
+
     check("pick inside returns the right id, null outside",
       globalThis.villagers.pick(alpha.x, alpha.y - 8) === "alpha" &&
       globalThis.villagers.pick(beta.x, beta.y - 8) === "beta" &&
-      globalThis.villagers.pick(200, 120) === null &&
-      globalThis.villagers.pick(240, 240) === null,
+      globalThis.villagers.pick(400, 60) === null &&
+      globalThis.villagers.pick(300, 100) === null,
       "alpha " + alpha.x + "," + alpha.y + " beta " + beta.x + "," + beta.y);
 
     var betaX = beta.x;
@@ -200,7 +227,7 @@
       alpha.state + " x " + alpha.x + " -> " + alpha.targetX);
     check("an idle villager stays put", beta.x === betaX, betaX + " -> " + beta.x);
 
-    globalThis.villagers.applyRoster([{ sessionId: "beta", name: "beta-5a6b7c8d", seed: 2944525511 }]);
+    globalThis.villagers.applyRoster([{ sessionId: "beta", name: "beta-5a6b7c8d", seed: SEED_B }]);
     check("a session missing from the roster drops its villager",
       globalThis.villagers.get("alpha") == null, "alpha " + globalThis.villagers.get("alpha"));
     globalThis.villagers.applyRoster([]);
@@ -209,7 +236,7 @@
     // Same column, 3px apart: the front villager covers the back one.
     function solo(ids) {
       globalThis.villagers.applyRoster(ids.map(function (id) {
-        return { sessionId: id, name: id, seed: id === "back" ? 0 : 25602 };
+        return { sessionId: id, name: id, seed: id === "back" ? "0" : "25602" };
       }));
       var c2 = document.createElement("canvas");
       c2.width = 480; c2.height = 270;
@@ -230,13 +257,36 @@
 
     globalThis.villagers.applyRoster(
       Array.from({ length: 30 }, function (_, i) {
-        return { sessionId: "s" + i, name: "villager-" + i, seed: (i + 1) * 2654435761 };
+        return { sessionId: "s" + i, name: "villager-" + i, seed: String((i + 1) * 2654435761) };
       })
     );
     var t0 = performance.now();
     for (var f = 0; f < 120; f++) globalThis.villagers.draw(ctx, 12);
     var per = (performance.now() - t0) / 120;
     check("30 villagers draw in under 16.7ms per frame", per < 16.7, per.toFixed(2) + "ms/frame");
+    globalThis.villagers.applyRoster([]);
+
+    // A wide name draws a wide pill: every lit pixel on its centre row must
+    // select the villager, and two pixels past each end must not.
+    globalThis.villagers.applyRoster([{ sessionId: "w", name: "a-very-long-villager-name", seed: SEED_A }]);
+    var wideV = globalThis.villagers.get("w");
+    for (var ws = 0; ws < 10; ws++) {
+      globalThis.villagers.draw(document.createElement("canvas").getContext("2d"), 12, 1);
+    }
+    var wideImg = snapshot();
+    var wideRow = Math.round(wideV.y) - 26;
+    var lo = null, hi = null;
+    for (var q = 0; q < 480; q++) {
+      if (litAt(wideImg, q, wideRow)) { if (lo === null) lo = q; hi = q; }
+    }
+    check("pick covers the whole nametag pill, and null just outside",
+      hi - lo + 1 > 60 &&
+      globalThis.villagers.pick(lo, wideRow) === "w" &&
+      globalThis.villagers.pick(hi, wideRow) === "w" &&
+      globalThis.villagers.pick((lo + hi) / 2, wideRow) === "w" &&
+      globalThis.villagers.pick(lo - 2, wideRow) === null &&
+      globalThis.villagers.pick(hi + 2, wideRow) === null,
+      "pill " + lo + ".." + hi + " (" + (hi - lo + 1) + "px)");
     globalThis.villagers.applyRoster([]);
 
     function probe(w, h) {

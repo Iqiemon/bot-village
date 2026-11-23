@@ -8,8 +8,17 @@
   var byId = {};
   var last = 0;
 
+  var FONT = "bold 7px monospace";
+  var measure = document.createElement("canvas").getContext("2d");
+  measure.font = FONT;
+  function pillW(name) {
+    return Math.round(measure.measureText(name).width) + 6;
+  }
+
   function spawn(r) {
-    var s = Math.abs(Number(r.seed) || 0);
+    // Seed is a uint64 sent as a string; reduce once to its low 32 bits, which
+    // are all the masks below read, so no low bit is lost to float64 rounding.
+    var s = Number(BigInt(r.seed || 0) & 0xffffffffn);
     var band = s % 3;
     var homeX = 40 + ((s >>> 4) % 400);
     var homeY = g.town.bandY(band) + 10 + ((s >>> 13) % 24);
@@ -87,7 +96,7 @@
   }
 
   function tag(ctx, P, v, cx, cy) {
-    var w = Math.round(ctx.measureText(v.name).width) + 6;
+    var w = pillW(v.name);
     ctx.fillStyle = P.paper;
     ctx.beginPath();
     ctx.roundRect(cx - w / 2, cy - 5, w, 10, 5);
@@ -117,20 +126,21 @@
   function draw(ctx, hour, dt) {
     step(dt);
     var P = g.town.palette(hour);
-    ctx.font = "bold 7px monospace";
+    ctx.font = FONT;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     var order = list.slice().sort(function (a, b) { return a.y - b.y; });
     for (var i = 0; i < order.length; i++) billboard(ctx, P, order[i]);
   }
 
-  // Front-most villager wins when boxes overlap; the nametag counts as part of
-  // the box so clicking a pill selects it.
+  // Front-most villager wins when boxes overlap.
   function pick(px, py) {
     var order = list.slice().sort(function (a, b) { return b.y - a.y; });
     for (var i = 0; i < order.length; i++) {
       var v = order[i];
-      if (Math.abs(px - v.x) <= 7 && py >= v.y - 32 && py <= v.y + 2) return v.id;
+      var x = Math.round(v.x), y = Math.round(v.y);
+      var half = Math.max(5, Math.ceil(pillW(v.name) / 2));
+      if (Math.abs(px - x) <= half && py >= y - 32 && py <= y + 2) return v.id;
     }
     return null;
   }
