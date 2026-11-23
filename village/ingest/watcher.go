@@ -14,6 +14,7 @@ import (
 type Event struct {
 	Kind      string
 	SessionID string
+	Slug      string
 	ToolName  string
 	Role      string
 	At        time.Time
@@ -159,7 +160,7 @@ func (w *Watcher) scan() {
 			if !ok {
 				sess = &watched{dataDir: dir, tail: w.openTranscript(s.SessionID, dir)}
 				w.sessions[s.SessionID] = sess
-				if !w.emit(Event{Kind: "spawn", SessionID: s.SessionID, At: time.Now()}) {
+				if !w.emit(Event{Kind: "spawn", SessionID: s.SessionID, Slug: s.Slug, At: time.Now()}) {
 					return
 				}
 			}

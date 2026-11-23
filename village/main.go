@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"botvillage/ingest"
 	"botvillage/server"
 )
 
@@ -36,6 +38,10 @@ func main() {
 	}
 
 	cfg := server.Config{DataDirs: data, Listen: *listen, Demo: *demo}
+	watcher := ingest.NewWatcher(ingest.WatcherConfig{DataDirs: data})
+	watcher.Start(context.Background())
+	defer watcher.Stop()
+	cfg.Events = watcher.Events()
 	fmt.Printf("Bot Village listening on %s\n", cfg.Listen)
 	log.Fatal(http.ListenAndServe(cfg.Listen, server.NewMux(cfg)))
 }
