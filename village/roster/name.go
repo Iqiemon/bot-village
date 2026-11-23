@@ -14,7 +14,7 @@ type Villager struct {
 	Name      string `json:"name"`
 	Title     string `json:"title,omitempty"`
 	Slug      string `json:"slug"`
-	Seed      uint64 `json:"seed"`
+	Seed      uint64 `json:"seed,string"`
 }
 
 // Build names each session from its own slug and session id. A name never

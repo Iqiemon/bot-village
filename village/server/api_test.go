@@ -55,7 +55,7 @@ func TestVillagersEndpointReflectsSpawnAndGone(t *testing.T) {
 	var got []struct {
 		SessionID string `json:"sessionId"`
 		Name      string `json:"name"`
-		Seed      uint64 `json:"seed"`
+		Seed      uint64 `json:"seed,string"`
 	}
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatal(err)
